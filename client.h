@@ -15,9 +15,11 @@ class Client
 private:
     int client_socket;           // socket descriptor
     SSL_CTX *ctx;                // SSL context
+
+    bool is_connected = false;   // is connected to server
     std::string server_hostname; // hostname of the server
 
-    int create_socket(std::string hostname, int port = 4433)
+    int create_socket(std::string hostname, int port = 4421)
     {
         struct sockaddr_in addr;
         struct hostent *server;
@@ -44,6 +46,11 @@ private:
         {
             perror("Unable to connect");
             exit(EXIT_FAILURE);
+        }
+        else
+        {
+            std::cout << "Connected to server" << std::endl;
+            is_connected = true;
         }
 
         return s;
@@ -94,22 +101,7 @@ private:
         return ssl;
     }
 
-public:
-    Client(std::string hostname)
-    {
-        // ctx = create_context();
-        client_socket = create_socket(hostname);
-    }
-
-    ~Client()
-    {
-        close(client_socket);
-        // SSL_CTX_free(ctx);
-    }
-
-    void run()
-    {
-        // SSL *ssl = create_ssl();
+    void read_from_server(){
         char buf[1024];
         int bytes;
 
@@ -121,13 +113,24 @@ public:
             {
                 buf[bytes] = 0;
                 std::cout << "Server: " << buf << std::endl;
+                if(strcmp(buf, "Bye") == 0){
+                    is_connected = false;
+                    break;
+                }
             }
             else
             {
                 ERR_print_errors_fp(stderr);
             }
+        }
+    }
 
-            std::cout<< "Client: ";
+    void write_to_server(){
+        char buf[1024];
+        int bytes;
+
+        while (true)
+        {
             std::cin.getline(buf, sizeof(buf));
 
             // bytes = SSL_write(ssl, buf, strlen(buf));
@@ -138,8 +141,36 @@ public:
                 ERR_print_errors_fp(stderr);
             }
         }
+    }
 
+public:
+    Client(std::string hostname): server_hostname(hostname)
+    {
+        // ctx = create_context();
+        client_socket = create_socket(hostname);
+    }
+
+    ~Client()
+    {
+        close(client_socket);
         // SSL_free(ssl);
+        // SSL_CTX_free(ctx);
+    }
+
+    void run()
+    {
+        std::cout << "Client running" << std::endl;
+
+        // Fork the process to perform read and write operations independently
+        pid_t pid = fork();
+        if (pid == 0)
+        {
+            read_from_server();
+        }
+        else
+        {
+            write_to_server();
+        }
     }
 };
 
