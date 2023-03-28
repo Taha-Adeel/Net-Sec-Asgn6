@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -13,8 +14,9 @@
 class Client
 {
 private:
-    int client_socket;           // socket descriptor
-    SSL_CTX *ctx;                // SSL context
+    int client_socket; // socket descriptor
+    SSL_CTX *ctx;      // SSL context
+    SSL *ssl;
 
     bool is_connected = false;   // is connected to server
     std::string server_hostname; // hostname of the server
@@ -58,7 +60,7 @@ private:
 
     SSL_CTX *create_context()
     {
-		SSL_library_init();
+        SSL_library_init();
         SSL_load_error_strings();
         OpenSSL_add_all_algorithms();
 
@@ -74,6 +76,8 @@ private:
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
         }
+        std::cout << "Context Created" << std::endl;
+        SSL_CTX_set_cipher_list(ctx, "ALL");
 
         return ctx;
     }
@@ -90,52 +94,142 @@ private:
 
         SSL_set_fd(ssl, client_socket);
 
+        SSL_set_ciphersuites(ssl, "ALL");
+
+        // adaptor->SetCipherList(ctx, std::string("ALL"));
+        // sslSocket = static_cast<SSLSocket *>(adaptor->Connect(ctx, "localhost", 8888));
+
         if (SSL_connect(ssl) != 1)
         {
             perror("Unable to connect to server :((( ");
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
-			throw std::runtime_error("Unable to connect to server :((( ");
+            throw std::runtime_error("Unable to connect to server :((( ");
         }
 
         return ssl;
     }
 
-    void read_from_server(){
+    /*void read_from_server()
+    {
         char buf[1024];
         int bytes;
 
         while (true)
         {
+            if (!is_connected)
+                exit(0);
             // bytes = SSL_read(ssl, buf, sizeof(buf));
             bytes = read(client_socket, buf, sizeof(buf));
             if (bytes > 0)
             {
                 buf[bytes] = 0;
                 std::cout << "Server: " << buf << std::endl;
-                if(strcmp(buf, "Bye") == 0){
+
+                if (strcmp(buf, "chat_START_SSL_ACK") == 0)
+                {
                     is_connected = false;
                     break;
+                }
+                if (strcmp(buf, "chat_close") == 0)
+                {
+                    is_connected = false;
+                    exit(0);
                 }
             }
             else
             {
                 ERR_print_errors_fp(stderr);
+                exit(0);
             }
         }
-    }
+    }*/
 
-    void write_to_server(){
+    void SSL_read_from_server()
+    {
         char buf[1024];
         int bytes;
 
         while (true)
         {
+            if (!is_connected)
+                exit(0);
+            bytes = SSL_read(ssl, buf, sizeof(buf));
+            // bytes = read(client_socket, buf, sizeof(buf));
+            if (bytes > 0)
+            {
+                buf[bytes] = 0;
+                std::cout << "Server: " << buf << std::endl;
+                if (strcmp(buf, "chat_close") == 0)
+                {
+                    is_connected = false;
+                    exit(0);
+                }
+            }
+            else
+            {
+                ERR_print_errors_fp(stderr);
+                exit(0);
+            }
+        }
+    }
+
+    /*void write_to_server()
+    {
+        char buf[1024];
+        int bytes;
+
+        while (true)
+        {
+            if (!is_connected)
+                break;
+            std::cout << "Client: " << std::endl;
             std::cin.getline(buf, sizeof(buf));
 
             // bytes = SSL_write(ssl, buf, strlen(buf));
             bytes = write(client_socket, buf, strlen(buf));
+            if (!is_connected)
+                break;
+            bytes = write(client_socket, buf, strlen(buf));
+            if (strcmp(buf, "chat_close") == 0)
+            {
+                is_connected = false;
+                break;
+            }
+            if (strcmp(buf, "chat_START_SSL") == 0)
+            {
+                is_connected = false;
+                break;
+            }
+            if (bytes < 0)
+            {
+                ERR_print_errors_fp(stderr);
+            }
+        }
+    }*/
 
+    void SSL_write_to_server()
+    {
+        char buf[1024];
+        int bytes;
+
+        while (true)
+        {
+            if (!is_connected)
+                break;
+            std::cout << "Client: " << std::endl;
+            std::cin.getline(buf, sizeof(buf));
+
+            // bytes = write(ssl, buf, strlen(buf));
+            bytes = SSL_write(ssl, buf, strlen(buf));
+            if (!is_connected)
+                break;
+            bytes = write(client_socket, buf, strlen(buf));
+            if (strcmp(buf, "chat_close") == 0)
+            {
+                is_connected = false;
+                break;
+            }
             if (bytes < 0)
             {
                 ERR_print_errors_fp(stderr);
@@ -143,18 +237,24 @@ private:
         }
     }
 
-public:
-    Client(std::string hostname): server_hostname(hostname)
+    void upgrade_connection()
     {
-        // ctx = create_context();
+        ctx = create_context();
+        ssl = create_ssl();
+    }
+
+public:
+    Client(std::string hostname) : server_hostname(hostname)
+    {
         client_socket = create_socket(hostname);
+        upgrade_connection();
     }
 
     ~Client()
     {
         close(client_socket);
-        // SSL_free(ssl);
-        // SSL_CTX_free(ctx);
+        SSL_free(ssl);
+        SSL_CTX_free(ctx);
     }
 
     void run()
@@ -162,15 +262,30 @@ public:
         std::cout << "Client running" << std::endl;
 
         // Fork the process to perform read and write operations independently
-        pid_t pid = fork();
-        if (pid == 0)
+        /*pid_t pid1 = fork();
+        if (pid1 == 0)
         {
             read_from_server();
         }
         else
         {
             write_to_server();
+            int returnStatus;
+            waitpid(pid1, &returnStatus,0);
+        }*/
+
+
+        pid_t pid2 = fork();
+        if (pid2 == 0)
+        {
+            SSL_read_from_server();
         }
+        else
+        {
+            SSL_write_to_server();
+        }
+
+        std::cout << "Chat closed" << std::endl;
     }
 };
 

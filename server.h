@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -19,8 +20,10 @@ private:
     std::string hostname;  // hostname of the server
     std::string cert_file; // certificate file
     std::string key_file;  // private key file
+    SSL *ssl;
 
-    int client;           // current client socket descriptor
+    bool is_connected = false; // is connected to client
+    int client;                // current client socket descriptor
 
     int create_socket(int port = 4421)
     {
@@ -54,10 +57,9 @@ private:
 
     SSL_CTX *create_context()
     {
-        SSL_library_init();              /* load encryption & hash algorithms for SSL */
-        OpenSSL_add_all_algorithms();       /* load & register all cryptos, etc. */
-    	SSL_load_error_strings();        /* load all error messages */
-
+        SSL_library_init();           /* load encryption & hash algorithms for SSL */
+        OpenSSL_add_all_algorithms(); /* load & register all cryptos, etc. */
+        SSL_load_error_strings();     /* load all error messages */
 
         const SSL_METHOD *method;
         SSL_CTX *ctx;
@@ -71,7 +73,7 @@ private:
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
         }
-
+        SSL_CTX_set_cipher_list(ctx, "ALL");
         return ctx;
     }
 
@@ -91,11 +93,11 @@ private:
         }
     }
 
-
-    void accept_connection(){
+    void accept_connection()
+    {
         struct sockaddr_in addr;
         unsigned int len = sizeof(addr);
-        SSL *ssl;
+        // SSL *ssl;
 
         client = accept(server_socket, (struct sockaddr *)&addr, &len);
         if (client < 0)
@@ -103,36 +105,135 @@ private:
             perror("Unable to accept");
             exit(EXIT_FAILURE);
         }
+        else
+        {
+            is_connected = true;
+            std::cout << "Client Connected" << std::endl;
+        }
     }
 
-    void read_from_client(){
+    void accept_SSL_Connection()
+    {
+        ssl = SSL_new(ctx);
+        if (!ssl)
+        {
+            perror("Unable to create SSL object for server");
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
+        }
+        SSL_set_fd(ssl, client);
+
+        if (SSL_accept(ssl) <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+        }
+        else
+        {
+            std::cout << "SSL Connection Sucessful" << std::endl;
+        }
+    }
+
+    /*void read_from_client()
+    {
         char buf[1024];
         int bytes;
         while (true)
         {
+            if (!is_connected)
+                break;
             // bytes = SSL_read(ssl, buf, sizeof(buf));
             bytes = read(client, buf, sizeof(buf));
             if (bytes > 0)
             {
                 buf[bytes] = 0;
                 std::cout << "Client: " << buf << std::endl;
+                if (strcmp(buf, "chat_close") == 0)
+                {
+                    is_connected = false;
+                    break;
+                }
+                else if (strcmp(buf, "chat_START_SSL") == 0)
+                {
+                    is_connected = false;
+                    break;
+                }
             }
-            else if (bytes == -1)
-            {   
+            else
+            {
                 std::cout << "Client Disconnected" << std::endl;
+                is_connected = false;
+                ERR_print_errors_fp(stderr);
+            }
+        }
+    }*/
+
+    void SSL_read_from_client()
+    {
+        char buf[1024];
+        int bytes;
+        while (true)
+        {
+            if (!is_connected)
+                break;
+            bytes = SSL_read(ssl, buf, sizeof(buf));
+            // bytes = read(client, buf, sizeof(buf));
+            if (bytes > 0)
+            {
+                buf[bytes] = 0;
+                std::cout << "Client: " << buf << std::endl;
+                if (strcmp(buf, "chat_close") == 0)
+                {
+                    is_connected = false;
+                    break;
+                }
+            }
+            else
+            {
+                std::cout << "Client Disconnected" << std::endl;
+                is_connected = false;
                 ERR_print_errors_fp(stderr);
             }
         }
     }
 
-    void write_to_client(){
+    /*void write_to_client()
+    {
         char buf[1024];
         int bytes;
         while (true)
         {
+            if (!is_connected)
+                break;
+            std::cout << "Server:" << std::endl;
             std::cin.getline(buf, sizeof(buf));
+
             // bytes = SSL_write(ssl, buf, strlen(buf));
             bytes = write(client, buf, strlen(buf));
+            if (bytes < 0)
+            {
+                perror("Unable to write");
+                ERR_print_errors_fp(stderr);
+            }
+            else if (strcmp(buf, "chat_START_SSL_ACK") == 0)
+            {
+                break;
+            }
+        }
+    }*/
+
+    void SSL_write_to_client()
+    {
+        char buf[1024];
+        int bytes;
+        while (true)
+        {
+            if (!is_connected)
+                break;
+            std::cout << "Server:" << std::endl;
+            std::cin.getline(buf, sizeof(buf));
+
+            bytes = SSL_write(ssl, buf, strlen(buf));
+            // bytes = write(client, buf, strlen(buf));
             if (bytes < 0)
             {
                 perror("Unable to write");
@@ -142,7 +243,7 @@ private:
     }
 
 public:
-    Server(): cert_file("bob.crt"), key_file("bobKey.pem")
+    Server() : cert_file("bob.crt"), key_file("bobKey.pem")
     {
         server_socket = create_socket();
 
@@ -150,35 +251,56 @@ public:
         signal(SIGPIPE, SIG_IGN);
 
         /* Create a new SSL context for the server */
-        // ctx = create_context();
-        // configure_context();
+        ctx = create_context();
+        configure_context();
     }
 
     ~Server()
     {
         close(server_socket);
-        // SSL_CTX_free(ctx);
+        SSL_CTX_free(ctx);
     }
 
     void run()
     {
         std::cout << "Server is running..." << std::endl;
-        
+
         /* Handle connections */
-        while(true){
+        while (true)
+        {
             accept_connection();
-            std::cout << "Client Connected" << std::endl;
+            accept_SSL_Connection();
 
             // Fork process to handle both read and write
-            pid_t pid = fork();
-            if(pid == 0){
+            /*pid_t pid1 = fork();
+            if (pid1 == 0)
+            {
                 // Child process
                 read_from_client();
+                std::cout << "Server Read Ended!" << std::endl;
             }
-            else{
+            else
+            {
                 // Parent process
                 write_to_client();
+                int returnStatus;
+                waitpid(pid1, &returnStatus, 0);
+                std::cout << "Server Write Ended!" << std::endl;
+            }*/
+
+
+            pid_t pid2 = fork();
+            if (pid2 == 0)
+            {
+                // Child process
+                SSL_read_from_client();
             }
+            else
+            {
+                // Parent process
+                SSL_write_to_client();
+            }
+
             close(client);
         }
     }
