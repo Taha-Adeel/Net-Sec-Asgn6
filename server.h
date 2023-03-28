@@ -67,13 +67,18 @@ private:
         method = TLS_server_method();
 
         ctx = SSL_CTX_new(method);
+
+        std::cout << "Server Socket Ciphers before changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
+        std::cout << "Changing ciphers: " << SSL_CTX_set_cipher_list(ctx, "AES256-SHA256") << std::endl;
+        ERR_print_errors_fp(stderr);
+        std::cout << "Server Socket Ciphers after changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
         if (!ctx)
         {
             perror("Unable to create SSL context for server");
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
         }
-        SSL_CTX_set_cipher_list(ctx, "ALL");
+        
         return ctx;
     }
 
@@ -122,6 +127,8 @@ private:
             exit(EXIT_FAILURE);
         }
         SSL_set_fd(ssl, client);
+        std::cout << "Server Socket Ciphers: " << SSL_get_ciphers(ssl) << std::endl;
+
 
         if (SSL_accept(ssl) <= 0)
         {

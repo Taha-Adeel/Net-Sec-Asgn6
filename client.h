@@ -70,6 +70,12 @@ private:
         method = TLS_client_method();
 
         ctx = SSL_CTX_new(method);
+
+        std::cout << "Client Socket Ciphers before changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
+        std::cout << "Changing ciphers: " << SSL_CTX_set_cipher_list(ctx, "AES256-SHA256") << std::endl;
+        ERR_print_errors_fp(stderr);
+        std::cout << "Client Socket Ciphers after changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
+
         if (!ctx)
         {
             perror("Unable to create SSL context for client");
@@ -77,7 +83,6 @@ private:
             exit(EXIT_FAILURE);
         }
         std::cout << "Context Created" << std::endl;
-        SSL_CTX_set_cipher_list(ctx, "ALL");
 
         return ctx;
     }
@@ -93,8 +98,10 @@ private:
         }
 
         SSL_set_fd(ssl, client_socket);
+        std::cout << "Client Socket Ciphers: " << SSL_get_ciphers(ssl) << std::endl;
 
-        SSL_set_ciphersuites(ssl, "ALL");
+        // SSL_set_ciphersuites(ssl, "DES-CBC3-SHA");
+        // std::cout << SSL_get_cipher(ssl) << std::endl;
 
         // adaptor->SetCipherList(ctx, std::string("ALL"));
         // sslSocket = static_cast<SSLSocket *>(adaptor->Connect(ctx, "localhost", 8888));
@@ -106,6 +113,7 @@ private:
             exit(EXIT_FAILURE);
             throw std::runtime_error("Unable to connect to server :((( ");
         }
+
 
         return ssl;
     }
