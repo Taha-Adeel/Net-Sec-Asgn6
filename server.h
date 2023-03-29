@@ -15,11 +15,13 @@
 class Server
 {
 private:
-    int server_socket;     // socket descriptor
-    SSL_CTX *ctx;          // SSL context
-    std::string hostname;  // hostname of the server
-    std::string cert_file; // certificate file
-    std::string key_file;  // private key file
+    int server_socket;          // socket descriptor
+    std::string hostname;       // hostname of the server
+    std::string cert_file;      // certificate file
+    std::string key_file;       // private key file
+    std::string root_cert_file; // root CA certificate
+
+    SSL_CTX *ctx; // SSL context
     SSL *ssl;
 
     bool is_connected = false; // is connected to client
@@ -64,21 +66,21 @@ private:
         const SSL_METHOD *method;
         SSL_CTX *ctx;
 
-        method = TLS_server_method();
+        method = TLSv1_2_server_method();
 
         ctx = SSL_CTX_new(method);
 
-        std::cout << "Server Socket Ciphers before changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
-        std::cout << "Changing ciphers: " << SSL_CTX_set_cipher_list(ctx, "AES256-SHA256") << std::endl;
-        ERR_print_errors_fp(stderr);
-        std::cout << "Server Socket Ciphers after changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
+        // std::cout << "Server Socket Ciphers before changing: " << SSL_CTX_get_ciphers(ctx) << std::endl;
+        // std::cout << "Changing ciphers: " << SSL_CTX_set_cipher_list(ctx, "AES256-SHA256") << std::endl;
+        // std::cout << "Context Ciphers: " << SSL_CTX_get_ciphers(ctx) << std::endl;
+
         if (!ctx)
         {
             perror("Unable to create SSL context for server");
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
         }
-        
+        std::cout << "Context Created!" << std::endl;
         return ctx;
     }
 
@@ -96,6 +98,20 @@ private:
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
         }
+
+        if (SSL_CTX_load_verify_locations(ctx, root_cert_file.c_str(), NULL) <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
+        }
+
+        if (SSL_CTX_check_private_key(ctx) <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
+        }
+
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
     }
 
     void accept_connection()
@@ -120,15 +136,16 @@ private:
     void accept_SSL_Connection()
     {
         ssl = SSL_new(ctx);
+
         if (!ssl)
         {
             perror("Unable to create SSL object for server");
             ERR_print_errors_fp(stderr);
             exit(EXIT_FAILURE);
         }
-        SSL_set_fd(ssl, client);
-        std::cout << "Server Socket Ciphers: " << SSL_get_ciphers(ssl) << std::endl;
 
+        SSL_set_fd(ssl, client);
+        // std::cout << "Server Socket Ciphers: " << SSL_get_ciphers(ssl) << std::endl;
 
         if (SSL_accept(ssl) <= 0)
         {
@@ -236,6 +253,7 @@ private:
         {
             if (!is_connected)
                 break;
+
             std::cout << "Server:" << std::endl;
             std::cin.getline(buf, sizeof(buf));
 
@@ -250,7 +268,7 @@ private:
     }
 
 public:
-    Server() : cert_file("bob.crt"), key_file("bobKey.pem")
+    Server() : cert_file("bob.crt"), key_file("bobKey.pem"), root_cert_file("int.crt")
     {
         server_socket = create_socket();
 
@@ -275,7 +293,7 @@ public:
         /* Handle connections */
         while (true)
         {
-            accept_connection();
+            // accept_connection();
             accept_SSL_Connection();
 
             // Fork process to handle both read and write
@@ -294,7 +312,6 @@ public:
                 waitpid(pid1, &returnStatus, 0);
                 std::cout << "Server Write Ended!" << std::endl;
             }*/
-
 
             pid_t pid2 = fork();
             if (pid2 == 0)
