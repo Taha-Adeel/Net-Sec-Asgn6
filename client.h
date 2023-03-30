@@ -70,7 +70,7 @@ private:
         const SSL_METHOD *method;
         SSL_CTX *ctx;
 
-        method = TLSv1_2_client_method();
+        method = TLS_client_method();
 
         ctx = SSL_CTX_new(method);
 

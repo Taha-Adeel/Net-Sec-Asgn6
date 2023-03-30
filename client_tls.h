@@ -35,6 +35,7 @@ private:
 
 	// Handshakes
 	void hello_handshake();
+	void ssl_handshake(){};
 
 	// TLS functions
 	void init_openssl();
@@ -48,7 +49,7 @@ public:
 
 
 // Constructor to initialize the client and establish a TCP connection to the server
-Client::Client(std::string server_hostname, int server_port = SERVER_PORT)
+Client::Client(std::string server_hostname, int server_port)
 	: server_hostname(server_hostname), server_port(server_port)
 {
 	// Open the connection to the server
@@ -70,12 +71,10 @@ void Client::run()
 	hello_handshake();
 
 	// Start the chat
-	int is_child = fork();
-	if(is_child == 0)
-	{
+	int child_pid = fork();
+	if(child_pid == 0){
 		// Read messages from the user and send them to the server
-		while(is_connected)
-		{
+		while(is_connected){
 			std::string message;
 			std::getline(std::cin, message);
 			send_message(message);
@@ -83,12 +82,12 @@ void Client::run()
 	}
 	else{
 		// Read messages from the server and print them to the console
-		while(is_connected)
-		{
+		while(is_connected){
 			std::string message = receive_message();
 			if(!handle_protocol_message(message))
 				std::cout << "Server: " << message << std::endl;
-		}	
+		}
+		kill(child_pid, SIGKILL); // Kill the child process waiting for user input
 	}
 
 	std::cout << "Client stopped" << std::endl;
@@ -115,6 +114,7 @@ void Client::open_connection()
 	}
 
 	is_connected = true;
+	std::cout << "Connected to server" << std::endl;
 }
 
 // Wrapper function to send a message to the server
@@ -129,16 +129,16 @@ void Client::send_message(std::string message)
 
 	// Send the message to the server
 	std::cout << "Sending message: " << message << std::endl;
-	int status = BIO_write(bio, message.c_str(), message.length());
+	int msg_len = BIO_write(bio, message.c_str(), message.length());
 
 	// Check if the message was sent successfully
-	if(status == 0)
+	if(msg_len == 0)
 	{	
 		is_connected = false;
 		std::cerr << "Server connection is closed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	else if(status < 0)
+	else if(msg_len < 0)
 	{
 		if(!BIO_should_retry(bio))
 		{
@@ -146,6 +146,7 @@ void Client::send_message(std::string message)
 			exit(EXIT_FAILURE);
 		}
 		// Handle retry
+		std::cout << "Retrying to send message" << std::endl;
 		send_message(message);
 	}
 }
@@ -162,16 +163,16 @@ std::string Client::receive_message()
 
 	// Receive the message from the server
 	char buffer[1024];
-	int status = BIO_read(bio, buffer, 1024);
+	int msg_len = BIO_read(bio, buffer, sizeof(buffer));
 
 	// Check if the message was received successfully
-	if(status == 0)
+	if(msg_len == 0)
 	{	
 		is_connected = false;
 		std::cerr << "Server connection is closed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	else if(status < 0)
+	else if(msg_len < 0)
 	{
 		if(!BIO_should_retry(bio))
 		{
@@ -182,8 +183,9 @@ std::string Client::receive_message()
 		return receive_message();
 	}
 
-	std:: cout << "Received message: " << buffer << std::endl;
-	return std::string(buffer);
+	std::string message(buffer, msg_len);
+	std:: cout << "Received message: " << message << std::endl;
+	return message;
 }
 
 // Handle the protocol messages
@@ -191,6 +193,8 @@ bool Client::handle_protocol_message(std::string message)
 {	
 	if(message == "chat_hello")
 		send_message("chat_ok_reply");
+	else if(message == "chat_ok_reply")
+		return true;
 	else if(message == "chat_close"){
 		send_message("chat_close_ok");
 		is_connected = false;

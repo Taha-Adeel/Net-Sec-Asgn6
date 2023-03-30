@@ -16,7 +16,7 @@ class Server
 {
 private:
     int server_socket;          // socket descriptor
-    std::string hostname;       // hostname of the server
+    // std::string hostname;       // hostname of the server
     std::string cert_file;      // certificate file
     std::string key_file;       // private key file
     std::string root_cert_file; // root CA certificate
@@ -66,7 +66,7 @@ private:
         const SSL_METHOD *method;
         SSL_CTX *ctx;
 
-        method = TLSv1_2_server_method();
+        method = TLS_server_method();
 
         ctx = SSL_CTX_new(method);
 

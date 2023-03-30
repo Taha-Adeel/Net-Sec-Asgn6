@@ -6,8 +6,8 @@
 #include <iostream>
 #include <cstring>
 
-#include "server.h"
-#include "client.h"
+#include "server_tls.h"
+#include "client_tls.h"
 
 int main(int argc, char *argv[])
 {
