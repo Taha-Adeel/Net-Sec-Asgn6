@@ -15,7 +15,7 @@
 
 class Server
 {
-protected:
+private:
 	int serverSocket;  // socket descriptor
 	int server_port;   // port of the server
 	bool is_connected; // flag to check if the client is connected to the server
@@ -26,16 +26,12 @@ protected:
 	SSL_CTX *ssl_ctx; // SSL context
 	SSL *ssl;		  // SSL object
 
-	// Wrapper functions to send and receive messages
-	void send_message(std::string message);
-	std::string receive_message();
 
 	// Protocol function
 	bool handle_protocol_message(std::string message);
 
 	// Connection functions
 	void create_socket();
-	void accept_connection();
 
 	// SSL functions
 	void init_openssl();
@@ -48,6 +44,11 @@ public:
 	~Server();
 
 	void run();
+
+	// Functions to send and receive messages and accept connections
+	void accept_connection();
+	void send_message(std::string message);
+	std::string receive_message();
 };
 
 // Constructor to initialize the server and create a TCP socket
@@ -245,6 +246,9 @@ bool Server::handle_protocol_message(std::string message)
 	{
 		send_message("chat_START_SSL_ACK");
 		upgrade_connection();
+	}
+	else if(message == "chat_START_SSL_NOT_SUPPORTED"){
+		std::cout << "Peer doesnt support SSL, continuing with unsecure communication";
 	}
 	else
 		return false;

@@ -25,13 +25,6 @@ private:
 	SSL_CTX *ssl_ctx; // SSL context
 	SSL *ssl;		  // SSL object
 
-	// Connection functions
-	void open_connection();
-
-	// Wrapper functions to send and receive messages
-	void send_message(std::string message);
-	std::string receive_message();
-
 	// Protocol function
 	bool handle_protocol_message(std::string message);
 
@@ -49,15 +42,19 @@ public:
 	~Client();
 
 	void run();
+
+	// Connection functions
+	void connect_to_server();
+
+	// Functions to send and receive messages
+	void send_message(std::string message);
+	std::string receive_message();
 };
 
 // Constructor to initialize the client and establish a TCP connection to the server
 Client::Client(std::string server_hostname, int server_port)
 	: server_hostname(server_hostname), server_port(server_port)
-{
-	// Open the connection to the server
-	open_connection();
-}
+{}
 
 // Destructor to close the connection
 Client::~Client()
@@ -70,6 +67,9 @@ Client::~Client()
 // Run the client
 void Client::run()
 {
+	// Open the connection to the server
+	connect_to_server();
+
 	std::cout << "Client started" << std::endl;
 
 	// Perform the hello handshake
@@ -108,7 +108,7 @@ void Client::run()
 }
 
 // Open a connection to the server
-void Client::open_connection()
+void Client::connect_to_server()
 {
 	// Creates a new BIO object and connects to the server
 	bio = BIO_new_connect((server_hostname + ":" + std::to_string(server_port)).c_str());

@@ -8,13 +8,12 @@
 
 #include "server_tls.h"
 #include "client_tls.h"
-#include "secure_chat_interceptor.h"
 
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
 	{
-		std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname> |-d <clienthostname> <serverhostname>]" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname>]" << std::endl;
 		return 1;
 	}
 
@@ -35,7 +34,7 @@ int main(int argc, char *argv[])
 	{
 		if (argc < 3)
 		{
-			std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname> |-d <clienthostname> <serverhostname>]" << std::endl;
+			std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname>]" << std::endl;
 			return 1;
 		}
 		std::cout << "Starting client connection to " << argv[2] << std::endl;
@@ -47,44 +46,12 @@ int main(int argc, char *argv[])
 		catch (std::exception &e)
 		{
 			std::cerr << "Client exception: " << e.what() << std::endl;
-		}
-	}
-	else if (strcmp(argv[1], "-c") == 0)
-	{
-		if (argc < 3)
-		{
-			std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname> |-d <clienthostname> <serverhostname>]" << std::endl;
-			return 1;
-		}
-		std::cout << "Starting client connection to " << argv[2] << std::endl;
-		try
-		{
-			Client client(argv[2]);
-			client.run();
-		}
-		catch (std::exception &e)
-		{
-			std::cerr << "Client exception: " << e.what() << std::endl;
-		}
-	}
-	else if (strcmp(argv[1], "-d") == 0)
-	{
-		if (argc < 4)
-		{
-			std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname> |-d <clienthostname> <serverhostname>]" << std::endl;
-			return 1;
-		}
-		std::cout << "Starting the Interceptor between " << argv[2] << " and " << argv[3] << std::endl;
-		try
-		{
-			Interceptor interceptor(argv[3]);
-			interceptor.run();
 		}
 	}
 	else
 	{
 		std::cerr << "Invalid argument" << std::endl;
-		std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname> |-d <clienthostname> <serverhostname>]" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname>]" << std::endl;
 		return 1;
 	}
 
