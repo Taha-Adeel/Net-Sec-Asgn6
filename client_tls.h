@@ -54,7 +54,8 @@ public:
 // Constructor to initialize the client and establish a TCP connection to the server
 Client::Client(std::string server_hostname, int server_port)
 	: server_hostname(server_hostname), server_port(server_port)
-{}
+{
+}
 
 // Destructor to close the connection
 Client::~Client()
@@ -221,6 +222,10 @@ bool Client::handle_protocol_message(std::string message)
 		init_openssl();
 		load_certificate();
 		upgrade_connection();
+	}
+	else if (message == "chat_START_SSL_NOT_SUPPORTED")
+	{
+		std::cout << "Peer doesnt support SSL, continuing with unsecure communication";
 	}
 	else
 		return false;

@@ -16,7 +16,6 @@ int main(int argc, char *argv[])
 		std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname>]" << std::endl;
 		return 1;
 	}
-
 	if (strcmp(argv[1], "-s") == 0)
 	{
 		std::cout << "Starting server..." << std::endl;
@@ -54,6 +53,5 @@ int main(int argc, char *argv[])
 		std::cerr << "Usage: " << argv[0] << " [-s|-c <serverhostname>]" << std::endl;
 		return 1;
 	}
-
 	return 0;
 }
